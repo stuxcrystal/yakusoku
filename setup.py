@@ -24,7 +24,6 @@ setup(
     author='stuxcrystal',
     author_email='stuxcrystal@encode.moe',
     description='A unified Future for Threading and AsyncIO',
-    data_files=[("", ["LICENSE.txt"])],
 
     classifiers=[
         'Development Status :: 4 - Beta',
