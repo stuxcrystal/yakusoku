@@ -49,3 +49,7 @@ jobs:
           command: |
             . venv/bin/activate
             python -m unittest discover tests
+
+      - store_artifacts:
+          path: test-reports
+          destination: test-reports
