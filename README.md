@@ -1,4 +1,5 @@
 # Yakusoku
+[![CircleCI](https://circleci.com/gh/stuxcrystal/yakusoku/tree/master.svg?style=svg)](https://circleci.com/gh/stuxcrystal/yakusoku/tree/master)
 
 ## Introduction
 
