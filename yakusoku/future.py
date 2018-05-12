@@ -64,7 +64,7 @@ def copy(source: AbstractFuture[T], target: AbstractFuture[T], *, copy_cancel=Tr
 
 
 def _copy_aiofuture(loop, *args, **kwargs):
-    loop.call_soon_threadsafe(lambda:copy(*args, **kwargs))
+    loop.call_soon_threadsafe(lambda: copy(*args, **kwargs))
 
 
 def wrap_future(fut: FutureOrCoroutine[T]) -> AbstractFuture[T]:
