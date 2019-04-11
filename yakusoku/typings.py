@@ -13,40 +13,48 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Generic, TypeVar,  Any, NamedTuple
+try:
+    from typing import Protocol
+except ImportError:
+    from typing import Generic as Protocol
+
+from typing import TypeVar,  Any, NamedTuple
 from typing import Callable, Optional, Coroutine, Union, Sequence
 
 T = TypeVar("T")
+V = TypeVar("V")
 
-try:
-    from typeshed.concurrent.futures import Future
-except ImportError:
-    class AbstractFuture(Generic[T]):
-        def done(self) -> bool: pass
+class Future(Protocol[T]):
 
-        def cancel(self) -> None: pass
+    def done(self) -> bool: pass
 
-        def cancelled(self) -> bool: pass
+    def cancel(self) -> None: pass
 
-        def set_result(self, result: T) -> None: pass
+    def cancelled(self) -> bool: pass
 
-        def set_exception(self, exception: BaseException) -> None: pass
+    def set_result(self, result: T) -> None: pass
 
-        def add_done_callback(self, cb: Callable[['AbstractFuture[T]'], None]) -> None: pass
+    def set_exception(self, exception: BaseException) -> None: pass
 
-        def exception(self) -> Optional[BaseException]: pass
+    def add_done_callback(self, cb: Callable[['Future[T]'], None]) -> None: pass
 
-        def result(self) -> T: pass
+    def exception(self) -> Optional[BaseException]: pass
 
-        def __await__(self): pass
+    def result(self) -> T: pass
+
+AbstractFuture = Future
+
+class AwaitableFuture(Future[T]):
+
+    def __await__(self) -> T: pass
 
 
-AsyncFunction = Callable[..., AbstractFuture[T]]
-PromiseCoroutine = Coroutine[T, None, AbstractFuture[Any]]
-PromiseCoroutineFunction = Callable[..., PromiseCoroutine]
-FutureOrCoroutine = Union[AbstractFuture[T], PromiseCoroutine]
+AsyncFunction = Callable[..., Future[T]]
+PromiseCoroutine = Coroutine[Future[Any], Any, Future[T]]
+PromiseCoroutineFunction = Callable[..., PromiseCoroutine[T]]
+FutureOrCoroutine = Union[Future[T], PromiseCoroutine[T]]
 
 
 class DoneAndNotDoneFutures(NamedTuple):
-    done: Sequence[AbstractFuture[Any]]
-    not_done: Sequence[AbstractFuture[Any]]
+    done: Sequence[Future[Any]]
+    not_done: Sequence[Future[Any]]

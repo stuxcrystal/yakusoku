@@ -16,12 +16,13 @@
 import functools
 from numbers import Real
 from types import coroutine
-from typing import Callable, Sequence
+from typing import Callable, Sequence, Tuple, overload, Union, Optional, cast
 from threading import Timer, Thread, Lock
-from concurrent.futures import Future, TimeoutError, CancelledError
+from concurrent.futures import TimeoutError, CancelledError
 from concurrent.futures import ALL_COMPLETED, FIRST_EXCEPTION, FIRST_COMPLETED
 
-from yakusoku.typings import AbstractFuture, T
+from yakusoku.future import Future
+from yakusoku.typings import AwaitableFuture, T
 from yakusoku.typings import PromiseCoroutineFunction, FutureOrCoroutine
 from yakusoku.typings import DoneAndNotDoneFutures
 
@@ -36,31 +37,39 @@ __all__ = [
 ]
 
 
-def resolve(data: T = None) -> AbstractFuture[T]:
+def resolve(data: T = None) -> AwaitableFuture[T]:
     """
     Returns a future that is already finished with the given value.
 
     :param data: The value to assign
     :return: A future resulting in the data.
     """
-    fut: AbstractFuture[T] = Future()
+    fut: AwaitableFuture[T] = Future()
     fut.set_result(data)
     return fut
 
 
-def reject(exc: BaseException) -> AbstractFuture[None]:
+def reject(exc: BaseException) -> AwaitableFuture[None]:
     """
     Returns a future that has failed with the given exception.
 
     :param exc: The exception to throw.
     :return: A future that throws the given exception.
     """
-    fut: AbstractFuture[None] = Future()
+    fut: AwaitableFuture[None] = Future()
     fut.set_exception(exc)
     return fut
 
-
-def futurize(func: PromiseCoroutineFunction[T], *, spawn=True) -> Callable[..., AbstractFuture[T]]:
+@overload
+def futurize(func=None, *, spawn: bool=True) -> Callable[[None, bool], Callable[..., AwaitableFuture[T]]]: pass
+@overload
+def futurize(func: PromiseCoroutineFunction[T], *, spawn: bool=True) -> Callable[..., AwaitableFuture[T]]: pass
+def futurize(
+        func: Optional[PromiseCoroutineFunction[T]]=None, *, spawn=True
+) -> Union[
+        Callable[[None, bool], Callable[..., AwaitableFuture[T]]],
+        Callable[..., AwaitableFuture[T]]
+]:
     """
     Makes this coroutine a function that returns a Future instead of a
     coroutine-object.
@@ -69,6 +78,11 @@ def futurize(func: PromiseCoroutineFunction[T], *, spawn=True) -> Callable[..., 
     :param spawn: If true, this function will spawn a new thread to execute the functions.
     :return: The function that returns a future.
     """
+    if func is None:
+        def _decorator(func: PromiseCoroutineFunction[T]) -> Callable[..., AwaitableFuture[T]]:
+            return cast(Callable[..., AwaitableFuture[T]], futurize(func, spawn=spawn))
+        return _decorator
+
     func = coroutine(func)
 
     async def wrapped(coro):
@@ -77,7 +91,7 @@ def futurize(func: PromiseCoroutineFunction[T], *, spawn=True) -> Callable[..., 
         return await coro
 
     @functools.wraps(func)
-    def _wrapper(*args, **kwargs) -> Callable[..., AbstractFuture[T]]:
+    def _wrapper(*args, **kwargs):
         c = func(*args, **kwargs)
         return run_coroutine(wrapped(c))
 
@@ -107,8 +121,16 @@ class _SleepForceThreadSwitch(Future):
             Thread(target=fn, args=(self,)).start()
         return super(_SleepForceThreadSwitch, self).add_done_callback(_fn)
 
-
-def sleep(delay: Real, result: T = None, *, also_return_timer=False) -> AbstractFuture[T]:
+@overload
+def sleep(delay: Real, result: T = None, *, also_return_timer: bool=True) -> Tuple[AwaitableFuture[T], Timer]: pass
+@overload
+def sleep(delay: Real, result: T = None, *, also_return_timer: bool=False) -> AwaitableFuture[T]: pass
+def sleep(
+        delay: Real,
+        result: T = None,
+        *,
+        also_return_timer: bool=False
+) -> Union[Tuple[AwaitableFuture[T], Timer], AwaitableFuture[T]]:
     """
     Returns a future that resolves after the given amount of time.
 
@@ -122,11 +144,11 @@ def sleep(delay: Real, result: T = None, *, also_return_timer=False) -> Abstract
             t.cancel()
 
     if delay == 0:
-        fut: AbstractFuture[T] = _SleepForceThreadSwitch()
+        fut: AwaitableFuture[T] = _SleepForceThreadSwitch()
         fut.set_result(result)
         t = None
     else:
-        fut: AbstractFuture[T] = Future()
+        fut: AwaitableFuture[T] = Future()
         fut.add_done_callback(_expire)
         t = Timer(float(delay), lambda: fut.set_result(result))
         t.start()
@@ -137,7 +159,7 @@ def sleep(delay: Real, result: T = None, *, also_return_timer=False) -> Abstract
     return fut
 
 
-def wait_for(fut: FutureOrCoroutine[T], timeout: float) -> AbstractFuture[T]:
+def wait_for(fut: FutureOrCoroutine[T], timeout: float) -> AwaitableFuture[T]:
     """
     Returns a future that will be cancelled after timeout seconds have
     passed.
@@ -159,7 +181,7 @@ def wait_for(fut: FutureOrCoroutine[T], timeout: float) -> AbstractFuture[T]:
         """Cancel the timeouter when future within the timeout."""
         timeouter.cancel()
 
-    result: AbstractFuture[T] = Future()
+    result: AwaitableFuture[T] = Future()
     timeouter = sleep(timeout) if timeout else Future()
     fut = wrap_future(fut)
 
@@ -170,7 +192,7 @@ def wait_for(fut: FutureOrCoroutine[T], timeout: float) -> AbstractFuture[T]:
     return result
 
 
-def shield(fut: FutureOrCoroutine[T]) -> AbstractFuture[T]:
+def shield(fut: FutureOrCoroutine[T]) -> AwaitableFuture[T]:
     """
     Shields a future from being cancelled by the parent.
 
@@ -187,7 +209,7 @@ def shield(fut: FutureOrCoroutine[T]) -> AbstractFuture[T]:
         if fut.cancelled():
             target.set_exception(CancelledError())
 
-    target: AbstractFuture[T] = Future()
+    target: AwaitableFuture[T] = Future()
     copy(fut, wrap_future(target), copy_cancel=False)
     fut.add_done_callback(_bubble_child)
     return target
@@ -197,7 +219,7 @@ def wait(
         futs_or_coros: Sequence[FutureOrCoroutine[T]],
         timeout: Real = 0,
         return_when=ALL_COMPLETED
-) -> AbstractFuture[DoneAndNotDoneFutures]:
+) -> AwaitableFuture[DoneAndNotDoneFutures]:
     """
     Waits for multiple futures.
 
@@ -229,7 +251,7 @@ def wait(
     running = list(map(wrap_future, futs_or_coros))
     lock = Lock()
 
-    def _single_finishes(fut: AbstractFuture[T]):
+    def _single_finishes(fut: AwaitableFuture[T]):
         if cond.done():
             return
 
@@ -280,7 +302,7 @@ def wait(
 def gather(
         *futs_or_coros: FutureOrCoroutine[T],
         return_exceptions: bool = False
-) -> AbstractFuture[Sequence[T]]:
+) -> AwaitableFuture[Sequence[T]]:
     """
     Gathers the results of the exceptions.
 
@@ -327,10 +349,10 @@ def gather(
             break
         result.set_result(result_list)
 
-    result: AbstractFuture[Sequence[T]] = Future()
+    result: AwaitableFuture[Sequence[T]] = Future()
     result.add_done_callback(_propagate_cancel)
 
-    waiter: AbstractFuture[DoneAndNotDoneFutures] = wait(futs, return_when=wait_mode)
+    waiter: AwaitableFuture[DoneAndNotDoneFutures] = wait(futs, return_when=wait_mode)
     waiter.add_done_callback(_gather_result)
 
     copy(result, waiter, copy_result=False)

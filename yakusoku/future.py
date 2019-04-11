@@ -15,11 +15,11 @@
 # limitations under the License.
 import sys
 from types import CoroutineType
-from concurrent.futures import Future
-from typing import Generator
+from concurrent.futures import Future as _Future
+from typing import Generator, cast, Type
 
 from yakusoku.context import in_run_coro
-from yakusoku.typings import FutureOrCoroutine, AbstractFuture, T
+from yakusoku.typings import FutureOrCoroutine, AbstractFuture, T, AwaitableFuture
 
 PY36: bool = sys.version_info >= (3, 6)
 
@@ -32,10 +32,12 @@ def _await_(self: AbstractFuture[T]) -> Generator[T, AbstractFuture[T], T]:
     return (yield from wrap_future(self))
 
 
-if not hasattr(Future, '__iter__'):
-    Future.__iter__ = _await_
-if PY36 and not hasattr(Future, '__await__'):
-        Future.__await__ = _await_
+if not hasattr(_Future, '__iter__'):
+    _Future.__iter__ = _await_
+if PY36 and not hasattr(_Future, '__await__'):
+        _Future.__await__ = _await_
+
+Future = cast(Type[AwaitableFuture[T]], _Future)
 
 
 def copy(source: AbstractFuture[T], target: AbstractFuture[T], *, copy_cancel=True, copy_result=True) -> None:
@@ -79,7 +81,7 @@ def wrap_future(fut: FutureOrCoroutine[T]) -> AbstractFuture[T]:
         from yakusoku.coroutines import run_coroutine
         return run_coroutine(fut)
 
-    if not isinstance(fut, Future):
+    if not isinstance(fut, _Future):
         target: AbstractFuture[T] = Future()
 
         from asyncio import Future as AIOFuture

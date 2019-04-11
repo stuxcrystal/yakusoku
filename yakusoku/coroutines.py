@@ -18,7 +18,8 @@ from typing import Any, Callable, NamedTuple, Optional
 
 from yakusoku.future import wrap_future
 from yakusoku.context import set_run_coro
-from yakusoku.typings import PromiseCoroutine, AbstractFuture, T
+from yakusoku.typings import PromiseCoroutine, AwaitableFuture
+from yakusoku.typings import Future as StandardFuture, T
 from yakusoku.typings import FutureOrCoroutine
 
 
@@ -27,7 +28,7 @@ class ResultData(NamedTuple):
     error: Optional[BaseException]
 
 
-class Task(Future, AbstractFuture[T]):
+class Task(Future, AwaitableFuture[T]):
     """
     A Task wraps a coroutine and runs it.
 
@@ -39,7 +40,7 @@ class Task(Future, AbstractFuture[T]):
     def __init__(self, coro: PromiseCoroutine[T]):
         super(Task, self).__init__()
         self.coro = coro
-        self.current_future: AbstractFuture[Any] = None
+        self.current_future: Optional[StandardFuture[Any]] = None
         self.add_done_callback(self._handle_cancel)
 
     def start(self):
@@ -57,7 +58,7 @@ class Task(Future, AbstractFuture[T]):
         self.current_future.cancel()
         self.coro.close()
 
-    def _handle_child_cancel(self, fut: AbstractFuture[Any]) -> None:
+    def _handle_child_cancel(self, fut: StandardFuture[Any]) -> None:
         if self.done():
             return
 
@@ -86,7 +87,7 @@ class Task(Future, AbstractFuture[T]):
         else:
             self.set_result(result.result)
 
-    def _receive_call_completed(self, fut: AbstractFuture[Any]):
+    def _receive_call_completed(self, fut: StandardFuture[Any]):
         if self.done():
             return
 
@@ -101,7 +102,7 @@ class Task(Future, AbstractFuture[T]):
         self.current_future.add_done_callback(self._receive_call_completed)
 
 
-def run_coroutine(coro: PromiseCoroutine[T]) -> AbstractFuture[T]:
+def run_coroutine(coro: PromiseCoroutine[T]) -> AwaitableFuture[T]:
     """
     Runs the coroutine in the current thread.
 

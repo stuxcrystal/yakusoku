@@ -17,6 +17,7 @@
 Yakusoku allows you to provide a unified API for Threading and
 AsyncIO based systems.
 """
+from yakusoku.future import Future
 from yakusoku.operations import resolve, reject, sleep
 from yakusoku.operations import futurize, synchronize
 from yakusoku.operations import wait_for, shield
@@ -25,6 +26,8 @@ from yakusoku.coroutines import run_coroutine
 
 
 __all__ = [
+    "Future",
+
     "resolve", "reject", "sleep",
     "futurize", "synchronize",
     "wait_for", "shield",
