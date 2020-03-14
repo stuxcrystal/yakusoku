@@ -32,9 +32,10 @@ def _await_(self: AbstractFuture[T]) -> Generator[T, AbstractFuture[T], T]:
     return (yield from wrap_future(self))
 
 
-if not hasattr(Future, '__iter__'):
-    Future.__iter__ = _await_
-if PY36 and not hasattr(Future, '__await__'):
+def monkeypatch_future():
+    if not hasattr(Future, '__iter__'):
+        Future.__iter__ = _await_
+    if PY36 and not hasattr(Future, '__await__'):
         Future.__await__ = _await_
 
 
